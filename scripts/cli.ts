@@ -273,11 +273,11 @@ async function loadInput(flags: Flags): Promise<unknown> {
   if (inputFile) {
     const fs = await import('node:fs/promises');
     const content = await fs.readFile(inputFile, 'utf8');
-    return JSON.parse(content);
+    return parseInputJson(content);
   }
 
   if (inputJson) {
-    return JSON.parse(inputJson);
+    return parseInputJson(inputJson);
   }
 
   return {};
@@ -309,12 +309,23 @@ function mergeOperateNode(input: unknown, operateNode?: string): unknown {
   };
 }
 
+function parseInputJson(content: string): unknown {
+  try {
+    return JSON.parse(content);
+  } catch {
+    throw new PanelError(
+      'INVALID_INPUT',
+      'Input must be valid JSON; inspect the private input file locally',
+    );
+  }
+}
+
 function parseOptionalJson(value: string | boolean | undefined): unknown {
   const stringValue = readOptionalString(value);
   if (!stringValue) {
     return undefined;
   }
-  return JSON.parse(stringValue);
+  return parseInputJson(stringValue);
 }
 
 function readOptionalString(value: string | boolean | undefined): string | undefined {

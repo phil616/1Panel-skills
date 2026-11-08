@@ -259,7 +259,13 @@ async function currentPolicy(client, target) {
     const filename = path.posix.basename(runtime).replace('.conf', '.json');
     const content = await (await fileResource(client, target, site.policyRoot + '/' + filename)).read();
     requireInput(content !== null, 'Managed policy manifest missing');
-    const policy = JSON.parse(content);
+    let policy;
+    try {
+        policy = JSON.parse(content);
+    }
+    catch {
+        throw new PanelError('INVALID_INPUT', 'Managed policy manifest is invalid JSON; inspect its private local copy');
+    }
     parseCABundle(policy.caBundle);
     normalizeFingerprints(policy.fingerprints);
     return { site, policy };

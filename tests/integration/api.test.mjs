@@ -703,6 +703,25 @@ test('private full CLI output keeps stdout redacted and reserves output before a
       ),
     );
     assert.equal(s.records.length, count);
+    await assert.rejects(
+      exec(
+        process.execPath,
+        [
+          'dist/scripts/cli.js',
+          'run',
+          'monitoring',
+          'getCurrentNode',
+          '--input-json',
+          'PRIVATE_TEST_SECRET not valid JSON',
+        ],
+        { env },
+      ),
+      (error) => {
+        assert.doesNotMatch(error.stderr, /PRIVATE_TEST_SECRET/);
+        assert.equal(JSON.parse(error.stderr).code, 'INVALID_INPUT');
+        return true;
+      },
+    );
   } finally {
     await s.close();
   }

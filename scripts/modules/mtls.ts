@@ -392,7 +392,15 @@ async function currentPolicy(client: OnePanelClientLike, target: Target) {
     await fileResource(client, target, site.policyRoot + '/' + filename)
   ).read();
   requireInput(content !== null, 'Managed policy manifest missing');
-  const policy = JSON.parse(content) as MtlsPolicy;
+  let policy: MtlsPolicy;
+  try {
+    policy = JSON.parse(content) as MtlsPolicy;
+  } catch {
+    throw new PanelError(
+      'INVALID_INPUT',
+      'Managed policy manifest is invalid JSON; inspect its private local copy',
+    );
+  }
   parseCABundle(policy.caBundle);
   normalizeFingerprints(policy.fingerprints);
   return { site, policy };
