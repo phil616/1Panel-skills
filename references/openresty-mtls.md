@@ -37,6 +37,8 @@ Supported sites: one existing HTTPS-only `server`, no HTTP listener, no QUIC/HTT
 | `mtls.updateLuaPolicy` | `luaVersion:"sha256-acl-v1",fingerprints?`, intent/acknowledgments | Only the reviewed template; arbitrary `content` rejected. |
 | `mtls.testMtlsPolicy` | authorized test target/URL/matrix | Real TLS/HTTP evidence or `NOT RUN`; new connections, HTTP/1.1. |
 
+Raw site/proxy/global actions preserve existing Lua handlers/dependencies and refuse direct Lua edits; controlled config files may reference only this site’s versioned reviewed Lua template. Use mTLS policy actions for Lua changes.
+
 Write intent is `{apply:true,confirm:true,expectedSha256:"<preview hash>"}`. Without `apply:true` mutations only read/plan. For absent files/directories use the preview's sentinel digest (distinct from an empty file). Multi-file policy apply and rotations additionally require `confirmLua:true,acknowledgeNonAtomic:true`. An apply can return `UNCHANGED` for the same desired bytes.
 
 ## Complete CLI example

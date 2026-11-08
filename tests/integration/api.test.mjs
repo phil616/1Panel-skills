@@ -534,7 +534,7 @@ test('known empty-file intermediate is removed when FileCreate succeeds but save
       run(s, 'files', 'createFile', {
         target: s.target,
         path: '/opt/1panel/www/sites/test/mtls/test.conf',
-        content: 'test text',
+        content: 'set $test value;',
         ...intent(ABSENT_SHA256),
       }),
       (e) => e.details.audit.result === 'ROLLED_BACK',
@@ -703,6 +703,78 @@ test('private full CLI output keeps stdout redacted and reserves output before a
       ),
     );
     assert.equal(s.records.length, count);
+  } finally {
+    await s.close();
+  }
+});
+
+test('raw site, proxy and global actions cannot introduce unchecked Lua even with confirmation', async () => {
+  const s = await panelServer();
+  try {
+    await assert.rejects(
+      run(s, 'websites', 'updateWebsiteRawConfig', {
+        target: s.target,
+        content: originalSite.replace(
+          'location /',
+          'access_by_lua_file /tmp/unreviewed.lua; location /',
+        ),
+        confirmLua: true,
+      }),
+      { code: 'FORBIDDEN' },
+    );
+    await assert.rejects(
+      run(s, 'websites', 'updateProxyRawConfig', {
+        target: s.target,
+        name: 'upstream',
+        content: 'location /proxy { access_by_lua_block { ngx.say("unreviewed"); } }',
+        confirmLua: true,
+      }),
+      { code: 'FORBIDDEN' },
+    );
+    await assert.rejects(
+      run(s, 'openresty', 'updateGlobalConfig', {
+        target: s.target,
+        content: 'events {} http { init_by_lua_file /tmp/unreviewed.lua; }',
+        confirmLua: true,
+        confirmGlobal: true,
+        backup: true,
+      }),
+      { code: 'FORBIDDEN' },
+    );
+    assert.equal(
+      s.records.filter((r) =>
+        [
+          '/api/v2/websites/nginx/update',
+          '/api/v2/websites/proxies/file',
+          '/api/v2/openresty/file',
+        ].includes(r.path),
+      ).length,
+      0,
+    );
+  } finally {
+    await s.close();
+  }
+});
+test('controlled conf and JSON files cannot disguise an arbitrary Lua payload', async () => {
+  const s = await panelServer();
+  s.dirs.add('/opt/1panel/www/sites/test/mtls');
+  try {
+    await assert.rejects(
+      run(s, 'files', 'writeFile', {
+        target: s.target,
+        path: '/opt/1panel/www/sites/test/mtls/payload.conf',
+        content: 'access_by_lua_block { ngx.say("unreviewed"); }',
+      }),
+      { code: 'INVALID_INPUT' },
+    );
+    await assert.rejects(
+      run(s, 'files', 'writeFile', {
+        target: s.target,
+        path: '/opt/1panel/www/sites/test/mtls/payload.json',
+        content: 'init_by_lua_file /tmp/exec.lua;',
+      }),
+      { code: 'INVALID_INPUT' },
+    );
   } finally {
     await s.close();
   }

@@ -310,14 +310,27 @@ export async function runMatrix(config) {
         'http {',
         'http { access_by_lua_file /www/sites/' + target.alias + '/mtls/test-waf.lua;',
       );
-      await restoreGlobal(waf);
-      const plan = await run('mtls', 'planMtlsPolicy', { target, policy, probeRuntime: true });
-      assert.equal(plan.runtime.code, 'CONFLICT');
-      await assert.rejects(
-        run('mtls', 'applyMtlsPolicy', { plan, ...intent(plan.expectedSha256) }),
-        { code: 'CONFLICT' },
-      );
-      await restoreGlobal();
+      // Trusted fault fixture only: deliberately install an existing handler through the real
+      // server API. Ordinary CLI/SDK raw configuration actions must refuse introducing Lua.
+      const fixtureWrite = (content) =>
+        client.request({
+          method: 'POST',
+          path: '/api/v2/openresty/file',
+          operateNode: 'local',
+          body: { content, backup: true },
+        });
+      await assert.rejects(restoreGlobal(waf), { code: 'FORBIDDEN' });
+      try {
+        await fixtureWrite(waf);
+        const plan = await run('mtls', 'planMtlsPolicy', { target, policy, probeRuntime: true });
+        assert.equal(plan.runtime.code, 'CONFLICT');
+        await assert.rejects(
+          run('mtls', 'applyMtlsPolicy', { plan, ...intent(plan.expectedSha256) }),
+          { code: 'CONFLICT' },
+        );
+      } finally {
+        await fixtureWrite(originalGlobal);
+      }
       return 'CONFLICT without include switch';
     });
     await check('invalid CA, Lua, cross-site path rejected without changes', async () => {

@@ -9,7 +9,7 @@ import {
   unwrap,
 } from '../security/discovery.js';
 import { requireInput } from '../security/errors.js';
-import { parseNginx } from '../security/nginx-config.js';
+import { parseNginx, assertLuaUnchanged } from '../security/nginx-config.js';
 import { remoteStat } from '../security/path-policy.js';
 export interface GlobalConfigInput extends WriteIntent {
   target: GlobalTarget;
@@ -31,6 +31,14 @@ export async function updateGlobalConfig(client: OnePanelClientLike, input: Glob
       input.confirmGlobal === true && input.backup === true,
       'Global apply needs confirmGlobal:true and backup:true',
     );
+  const previous = unwrap(
+    await client.request({
+      method: 'GET',
+      path: '/api/v2/openresty',
+      operateNode: input.target.operateNode,
+    }),
+  ).content as string;
+  assertLuaUnchanged(previous, input.content);
   const filePath = path.posix.join(app.path, 'conf/nginx.conf');
   const change = await safeWrite(
     {

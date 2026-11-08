@@ -28,6 +28,8 @@ All new mutations default to dry-run and never invoke a write endpoint in previe
 
 1Panel has no atomic compare-and-swap for these APIs. Rechecking hashes reduces races but cannot eliminate a change between the last read and the server write. Coordinate other editors. Multi-file changes use compensating recovery and are not atomic. A recovery failure is `ROLLBACK_FAILED`; stop and inspect the current disk/worker state before using a backup.
 
+Raw site/proxy/global updates preserve existing Lua handlers and dependencies but refuse adding, moving or altering them directly. Use the reviewed mTLS workflow for Lua changes. Policy `.conf` files may reference only this site’s versioned reviewed Lua; `.json` files must be JSON data.
+
 Do not use generic `request`, ad hoc signed HTTP, or unrelated file paths to bypass managed write gates. `request` now permits GET and known implemented POST reads only. Reserved actions remain unimplemented until intentionally extended.
 
 ## Select the relevant module

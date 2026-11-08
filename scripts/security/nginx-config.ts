@@ -215,3 +215,32 @@ export function managedSiteConfig(content: string, runtimePolicyPath: string) {
   // Stable insertion: no new whitespace outside the exact managed marker range.
   return clean.slice(0, server.close!) + insertion + clean.slice(server.close!);
 }
+
+// Raw Nginx administration must not become an unchecked Lua upload route.
+// Preserve existing handlers/dependencies, and route Lua changes through reviewed policy actions.
+export function assertLuaUnchanged(before: string, after: string) {
+  function signatures(source: string) {
+    const out: string[] = [];
+    function visit(nodes: Directive[], context: { name: string; args: string[] }[]) {
+      for (const node of nodes) {
+        if (/_by_lua(?:_|$)/.test(node.name) || node.name.startsWith('lua_'))
+          out.push(
+            JSON.stringify({
+              context,
+              name: node.name,
+              args: node.args,
+              block: node.open === undefined ? undefined : source.slice(node.open + 1, node.close),
+            }),
+          );
+        if (node.children) visit(node.children, [...context, { name: node.name, args: node.args }]);
+      }
+    }
+    visit(parseNginx(source), []);
+    return out;
+  }
+  if (JSON.stringify(signatures(before)) !== JSON.stringify(signatures(after)))
+    throw new PanelError(
+      'FORBIDDEN',
+      'Raw configuration cannot add or alter Lua handlers/dependencies; use the reviewed mTLS template workflow',
+    );
+}

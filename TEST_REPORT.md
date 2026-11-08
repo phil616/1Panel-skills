@@ -2,7 +2,7 @@
 
 执行日期：2026-11-08。交付位置：[phil616/1Panel-skills](https://github.com/phil616/1Panel-skills)，分支 `feat/openresty-security-management`。以已授权身份实际创建个人 Fork；未向官方仓库提交 PR，未发布 ClawHub 技能。
 
-实现提交：[e1f70fde107d11fb33c02dafcd7e563b30fcff09](https://github.com/phil616/1Panel-skills/commit/e1f70fde107d11fb33c02dafcd7e563b30fcff09)。个人 Fork PR：[#1](https://github.com/phil616/1Panel-skills/pull/1)。该实现提交的 [GitHub CI](https://github.com/phil616/1Panel-skills/actions/runs/42495949694) 已实际完成，Node 18 和 Node 24 两个 job 均 SUCCESS；未自动合并。
+基础实现提交：[e1f70fde107d11fb33c02dafcd7e563b30fcff09](https://github.com/phil616/1Panel-skills/commit/e1f70fde107d11fb33c02dafcd7e563b30fcff09)。个人 Fork PR：[#1](https://github.com/phil616/1Panel-skills/pull/1)。该基础提交的 [GitHub CI](https://github.com/phil616/1Panel-skills/actions/runs/42495949694) 已实际完成，Node 18 和 Node 24 两个 job 均 SUCCESS；追加的 Lua 旁路限制与最终提交见同一 PR 历史；未自动合并。
 
 ## 来源与基线
 
@@ -36,10 +36,10 @@
 | `npm ci` | PASS，安装 3 个开发依赖，无新增运行时框架 |
 | `npm run typecheck` | PASS |
 | `npm run build` | PASS，重新生成跟踪的 dist |
-| `npm test` | **80 passed, 0 failed, 0 skipped** |
-| `node --test tests/security.test.mjs` | **36 passed**，路径/变更/CA/DER/配置安全 |
+| `npm test` | **83 passed, 0 failed, 0 skipped** |
+| `node --test tests/security.test.mjs` | **37 passed**，路径/变更/CA/DER/配置安全 |
 | `node --test tests/client.test.mjs` | **14 passed**，签名/HTTP/TLS/multipart/网络错误 |
-| `node --test tests/integration/api.test.mjs` | **30 passed**，真实本地 HTTP Mock server、CLI 与完整流程 |
+| `node --test tests/integration/api.test.mjs` | **32 passed**，真实本地 HTTP Mock server、CLI 与完整流程 |
 | `ONEPANEL_E2E_REPORT=/private/report.json npm run test:e2e:local` | **PASS：23 个真实场景，0 failed** |
 | Node v18.20.8 Docker 冒烟 | PASS：ESM 的 11 模块注册、固定 HMAC 向量、HTTP 请求、安全写入/备份 |
 | `quick_validate.py .` | PASS：Skill is valid |
@@ -50,7 +50,7 @@
 
 单元测试并非仅靠 Mock 自证：固定 MD5/HMAC 值独立由 Python 生成；公开证书 DER 的 SHA-256 与 OpenSSL 结果比对；真实 OpenSSL 创建根/中间/叶证书并验证正反链路及 pathLen 约束；HTTPS 测试服务器验证默认 TLS 拒绝无信任证书。Mock 套件校验实际 HTTP 方法、路径、字段大小写、节点 query、请求次数、磁盘状态模型、备份权限和 CLI 输出。
 
-错误路径覆盖：401/403/404/405/409/500、HTTP 200 业务错误、非 JSON、超时、中断、已提交但响应丢失、并发编辑、错误目标/节点、符号链接、超大文件、缺依赖、非法 CA/指纹/Lua、既有 access handler、rollback 失败、空文件创建中间状态恢复、受控 include 仅删除本模块内容、不可变文件摘要不一致、输出文件已存在时不发请求。
+错误路径覆盖：401/403/404/405/409/500、HTTP 200 业务错误、非 JSON、超时、中断、已提交但响应丢失、并发编辑、错误目标/节点、符号链接、超大文件、缺依赖、非法 CA/指纹/Lua、既有 access handler、rollback 失败、空文件创建中间状态恢复、受控 include 仅删除本模块内容、不可变文件摘要不一致、输出文件已存在时不发请求；原始站点/反代/全局配置不可直接新增、移动或改写 Lua 处理器/依赖，受控 conf 只可引用本站版本化 Lua，JSON 文件不得伪装代码。
 
 ## 真实 E2E 环境与证据
 
@@ -88,7 +88,7 @@
 
 - 运行时：修改 `scripts/client.ts`、`cli.ts`、`types.ts`、`index.ts`、`modules/websites.ts`；新增 `modules/openresty.ts`、`files.ts`、`website-security.ts`、`mtls.ts` 和 `security/*.ts`；同步 `dist/scripts/**`。
 - 测试：`tests/client.test.mjs`、`security.test.mjs`、`integration/api.test.mjs`，真实 HTTP server/PKI fixtures，`tests/e2e/` 的隔离面板创建、真实请求矩阵、初始化与清理脚本；公开 `assets/fingerprint-vector.pem`。
-- 文档：SKILL、双语 README、module-groups、安全/操作/上游契约说明、当前报告、Agent UI metadata。工作流仅增加测试与必要打包资源，不执行发布。
+- 文档：SKILL、双语 README、module-groups、安全/操作/上游契约说明、当前报告、Agent UI metadata。工作流仅增加测试与必要打包资源，不执行发布。Node 18 使用保留 `package.json` ESM 声明的完整 Fork checkout；ClawHub 仅验证上传清单，未宣称不含 package.json 的独立归档已通过 Node 18 运行测试。
 
 有意保留的边界：高级远程运行时验证、WAF 合成、任意 Lua、audit-only、HTTP3/QUIC、CRL/OCSP 撤销管理和活跃连接强制终止没有实现。高层需要运行时依赖且只支持明确的 HTTPS server 布局；对其他站点结构或继承 handler 保守拒绝。P0 文件操作仍依赖服务端 API，无法消除 symlink/CAS 竞态。任意未知第三方状态的自动覆盖被禁止，可能需要人工按私密备份恢复。
 

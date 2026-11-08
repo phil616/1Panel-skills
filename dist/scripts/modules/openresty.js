@@ -2,7 +2,7 @@ import path from 'node:path';
 import { safeWrite } from '../security/change-plan.js';
 import { checkContent, discoverInstance, result, unwrap, } from '../security/discovery.js';
 import { requireInput } from '../security/errors.js';
-import { parseNginx } from '../security/nginx-config.js';
+import { parseNginx, assertLuaUnchanged } from '../security/nginx-config.js';
 import { remoteStat } from '../security/path-policy.js';
 export async function updateGlobalConfig(client, input) {
     const app = await discoverInstance(client, input.target);
@@ -12,6 +12,12 @@ export async function updateGlobalConfig(client, input) {
         roots.some((n) => n.name === 'http' && n.children), 'Full global configuration with events and http required');
     if (input.apply)
         requireInput(input.confirmGlobal === true && input.backup === true, 'Global apply needs confirmGlobal:true and backup:true');
+    const previous = unwrap(await client.request({
+        method: 'GET',
+        path: '/api/v2/openresty',
+        operateNode: input.target.operateNode,
+    })).content;
+    assertLuaUnchanged(previous, input.content);
     const filePath = path.posix.join(app.path, 'conf/nginx.conf');
     const change = await safeWrite({
         id: 'openresty.global',

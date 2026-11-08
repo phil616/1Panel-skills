@@ -24,6 +24,8 @@ Limits: text 1 MiB; reviewed Lua 64 KiB; request 2 MiB; response 8 MiB; 32 CA ce
 
 ## mTLS and Lua
 
+Raw site, proxy and global configuration actions refuse directly adding, relocating or altering Lua handlers/dependencies, while preserving existing ones during unrelated edits. Controlled `.conf` files permit only a same-site versioned reviewed Lua reference; `.json` must parse as data. These gates reduce routine bypasses but do not turn an administrative Nginx client into a server sandbox.
+
 The only permitted template is `sha256-acl-v1`. Code review and a real runtime DER hash vector establish the tested implementation; string checks alone do not prove Lua safety. No shell execution or arbitrary Lua endpoint is exposed. Runtime probes invoke fixed Docker/resty arguments with `execFile`, without shell interpolation.
 
 The Lua handler uses `pcall`; any exception or missing dependency denies access. The empty allowlist denies all. Unverified clients are denied before accessing the leaf certificate. Only successful chain validation plus an allowed leaf DER SHA-256 digest authorizes forwarding. Server-level mTLS directives are never placed into ordinary location proxy files.

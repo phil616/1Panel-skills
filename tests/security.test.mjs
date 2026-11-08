@@ -315,3 +315,18 @@ test('CA pathLen=0 forbids an additional intermediate below it', () => {
     pki.run('verify', '-CAfile', 'root.pem', '-untrusted', 'deep-issuers.pem', 'deep-leaf.pem'),
   );
 });
+
+test('raw edits preserve existing Lua handlers and refuse relocating them between contexts', async () => {
+  const { assertLuaUnchanged } = await import('../dist/scripts/security/nginx-config.js');
+  const before =
+    'server { location /admin { access_by_lua_file /waf.lua; proxy_pass http://example.com; } }';
+  assert.doesNotThrow(() => assertLuaUnchanged(before, before + '\n# harmless comment\n'));
+  assert.throws(
+    () =>
+      assertLuaUnchanged(
+        before,
+        'server { access_by_lua_file /waf.lua; location /admin { proxy_pass http://example.com; } }',
+      ),
+    { code: 'FORBIDDEN' },
+  );
+});

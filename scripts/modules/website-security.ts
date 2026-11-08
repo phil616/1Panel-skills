@@ -3,6 +3,7 @@ import type { ModuleAction, OnePanelClientLike } from '../types.js';
 import { safeWrite, sha256, type WriteIntent } from '../security/change-plan.js';
 import { type Target, discoverSite, unwrap, result, checkContent } from '../security/discovery.js';
 import { siteResource } from '../security/resources.js';
+import { assertLuaUnchanged } from '../security/nginx-config.js';
 import { remoteStat } from '../security/path-policy.js';
 import { PanelError, requireInput } from '../security/errors.js';
 export interface WebsiteRawInput extends WriteIntent {
@@ -90,6 +91,7 @@ export async function updateProxyRawConfig(client: OnePanelClientLike, input: Pr
     );
     return matches[0].content as string;
   };
+  assertLuaUnchanged(await read(), input.content);
   return result(
     await safeWrite(
       {

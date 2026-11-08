@@ -1,11 +1,11 @@
 import path from 'node:path';
 import type { OnePanelClientLike } from '../types.js';
 import { sha256 } from './change-plan.js';
-import { parseNginx } from './nginx-config.js';
+import { parseNginx, flatten, assertLuaUnchanged } from './nginx-config.js';
 import type { Resource } from './change-plan.js';
 import { checkContent, discoverSite, type Target, unwrap } from './discovery.js';
 import { controlledPath, remoteStat } from './path-policy.js';
-import { requireInput } from './errors.js';
+import { requireInput, PanelError } from './errors.js';
 
 export async function siteResource(client: OnePanelClientLike, target: Target): Promise<Resource> {
   const discovered = await discoverSite(client, target);
@@ -18,6 +18,7 @@ export async function siteResource(client: OnePanelClientLike, target: Target): 
         parseNginx(value).some((node) => node.name === 'server' && node.children),
         'Full site config with a server block required',
       );
+      assertLuaUnchanged(discovered.content, value);
     },
     async read() {
       await discoverSite(client, target);
@@ -60,6 +61,29 @@ export async function fileResource(
     validate(content) {
       if (content !== null) {
         checkContent(content, path.posix.extname(filePath) === '.lua' ? 64 * 1024 : 1024 * 1024);
+        if (filePath.endsWith('.json')) {
+          try {
+            JSON.parse(content);
+          } catch {
+            throw new PanelError('INVALID_INPUT', 'Policy JSON must be valid JSON data');
+          }
+        }
+        if (filePath.endsWith('.conf')) {
+          const prefix = `/www/sites/${target.alias}/mtls/acl-`;
+          const nodes = flatten(parseNginx(content));
+          requireInput(
+            nodes.every(
+              (node) =>
+                !node.name.startsWith('lua_') &&
+                (!/_by_lua(?:_|$)/.test(node.name) ||
+                  (node.name === 'access_by_lua_file' &&
+                    node.args.length === 1 &&
+                    node.args[0].startsWith(prefix) &&
+                    /^[a-f0-9]{64}\.lua$/.test(node.args[0].slice(prefix.length)))),
+            ),
+            'Policy config may reference only its site’s versioned reviewed Lua template',
+          );
+        }
         const versioned = /^(?:ca|acl|policy)-([a-f0-9]{64})\.(pem|lua|conf)$/.exec(
           path.posix.basename(filePath),
         );
