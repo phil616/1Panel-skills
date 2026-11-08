@@ -2,6 +2,8 @@
 
 执行日期：2026-11-08。交付位置：[phil616/1Panel-skills](https://github.com/phil616/1Panel-skills)，分支 `feat/openresty-security-management`。以已授权身份实际创建个人 Fork；未向官方仓库提交 PR，未发布 ClawHub 技能。
 
+实现提交：[e1f70fde107d11fb33c02dafcd7e563b30fcff09](https://github.com/phil616/1Panel-skills/commit/e1f70fde107d11fb33c02dafcd7e563b30fcff09)。个人 Fork PR：[#1](https://github.com/phil616/1Panel-skills/pull/1)。该实现提交的 [GitHub CI](https://github.com/phil616/1Panel-skills/actions/runs/42495949694) 已实际完成，Node 18 和 Node 24 两个 job 均 SUCCESS；未自动合并。
+
 ## 来源与基线
 
 - 官方 Skill `main`：`33d74c9502e7ae509d8c1d7f3f1c78fd13ac23c6`。
@@ -43,6 +45,8 @@
 | `quick_validate.py .` | PASS：Skill is valid |
 | `go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 .github/workflows/ci.yml .github/workflows/push-clawhub.yml` | PASS |
 | `git diff --check` | PASS |
+| ClawHub 上传目录构造 smoke | PASS，包含公开 fingerprint vector 与报告，未执行登录/发布 |
+| GitHub Actions Node 18 / Node 24 | 两个 job 均 SUCCESS，见上方运行链接 |
 
 单元测试并非仅靠 Mock 自证：固定 MD5/HMAC 值独立由 Python 生成；公开证书 DER 的 SHA-256 与 OpenSSL 结果比对；真实 OpenSSL 创建根/中间/叶证书并验证正反链路及 pathLen 约束；HTTPS 测试服务器验证默认 TLS 拒绝无信任证书。Mock 套件校验实际 HTTP 方法、路径、字段大小写、节点 query、请求次数、磁盘状态模型、备份权限和 CLI 输出。
 
