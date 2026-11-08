@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 
-import { createHash } from 'node:crypto';
+import { signHeaders, type SignatureVersion } from './client.js';
+import { redact } from './security/redaction.js';
+import { PanelError, requireInput } from './security/errors.js';
 
 import { OnePanelClient } from './client.js';
 import { getModule, listModules } from './index.js';
+import type { OnePanelResponse } from './types.js';
 
 type Flags = Record<string, string | boolean>;
 
@@ -45,13 +48,21 @@ Usage:
   1panel-skills actions <module>
   1panel-skills sign [--base-url URL] [--api-key KEY]
   1panel-skills request <METHOD> <PATH> [--body-json JSON] [--query-json JSON] [--node NODE]
-  1panel-skills run <module> <action> [--input-json JSON] [--input-file FILE] [--node NODE]
+  1panel-skills run <module> <action> [--input-json JSON] [--input-file FILE] [--node NODE] [--apply --confirm] [--output-file FILE]
 
 Environment:
   ONEPANEL_BASE_URL
   ONEPANEL_API_KEY
+  ONEPANEL_SIGNATURE_VERSION (md5 compatibility default, or hmac-sha256; never auto-downgraded)
+  ONEPANEL_KEY_ID (optional independent API key ID)
+  ONEPANEL_STATE_DIR (private 0700 backup/audit directory)
   ONEPANEL_TIMEOUT_MS
   ONEPANEL_SKIP_TLS_VERIFY
+
+Managed writes: default dry-run. Apply requires target, expectedSha256 and confirm:true.
+mTLS also requires confirmLua:true and acknowledgeNonAtomic:true. Use --input-file for plans.
+--output-file writes a private full response for local review; stdout is redacted.
+Generic request: GET and known POST reads only. Writes use managed module actions.
 
 Examples:
   1panel-skills modules
@@ -92,6 +103,8 @@ function handleActions(args: string[]): void {
           method: action.method,
           path: action.path,
           nodeAware: Boolean(action.nodeAware),
+          mutation: Boolean(action.mutation),
+          scope: action.scope,
         })),
         reservedMutations: moduleDef.reservedMutations,
       },
@@ -105,16 +118,18 @@ function handleSign(args: string[]): void {
   const { flags } = parseArgs(args);
   const config = resolveClientConfig(flags);
   const timestamp = `${Math.floor(Date.now() / 1000)}`;
-  const token = computeToken(config.apiKey, timestamp);
+  const headers = signHeaders(
+    config.apiKey,
+    timestamp,
+    (process.env.ONEPANEL_SIGNATURE_VERSION || 'md5') as SignatureVersion,
+    process.env.ONEPANEL_KEY_ID,
+  );
 
   console.log(
     JSON.stringify(
       {
         baseUrl: config.baseUrl,
-        headers: {
-          '1Panel-Timestamp': timestamp,
-          '1Panel-Token': token,
-        },
+        headers,
       },
       null,
       2,
@@ -125,7 +140,9 @@ function handleSign(args: string[]): void {
 async function handleRequest(args: string[]): Promise<void> {
   const [method, path, ...rest] = args;
   if (!method || !path) {
-    throw new Error('Usage: request <METHOD> <PATH> [--body-json JSON] [--query-json JSON] [--node NODE]');
+    throw new Error(
+      'Usage: request <METHOD> <PATH> [--body-json JSON] [--query-json JSON] [--node NODE]',
+    );
   }
 
   const { flags } = parseArgs(rest);
@@ -134,21 +151,31 @@ async function handleRequest(args: string[]): Promise<void> {
   const query = parseOptionalJson(flags['query-json']);
   const operateNode = readOptionalString(flags.node);
 
-  const response = await client.request({
-    method: method.toUpperCase() as 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
-    path,
-    body,
-    query: isRecord(query) ? (query as Record<string, string | number | boolean | null | undefined>) : undefined,
-    operateNode,
-  });
-
-  printResponse(response.status, response.data, response.rawBody);
+  const { isReadRequest } = await import('./security/request-policy.js');
+  requireInput(
+    isReadRequest(method.toUpperCase(), path),
+    'Generic request cannot send mutations; use a guarded module action',
+  );
+  await executeAndPrint(flags, () =>
+    client.request({
+      readOnly: true,
+      method: method.toUpperCase() as 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+      path,
+      body,
+      query: isRecord(query)
+        ? (query as Record<string, string | number | boolean | null | undefined>)
+        : undefined,
+      operateNode,
+    }),
+  );
 }
 
 async function handleRun(args: string[]): Promise<void> {
   const [moduleId, actionId, ...rest] = args;
   if (!moduleId || !actionId) {
-    throw new Error('Usage: run <module> <action> [--input-json JSON] [--input-file FILE] [--node NODE]');
+    throw new Error(
+      'Usage: run <module> <action> [--input-json JSON] [--input-file FILE] [--node NODE]',
+    );
   }
 
   const { flags } = parseArgs(rest);
@@ -160,11 +187,32 @@ async function handleRun(args: string[]): Promise<void> {
 
   const input = await loadInput(flags);
   const operateNode = readOptionalString(flags.node);
-  const finalInput = mergeOperateNode(input, operateNode);
+  let finalInput = mergeOperateNode(input, operateNode);
+  if (isRecord(finalInput)) {
+    finalInput = {
+      ...finalInput,
+      ...(flags.apply === true ? { apply: true } : {}),
+      ...(flags.confirm === true ? { confirm: true } : {}),
+    };
+  }
   const client = createClient(flags);
-  const response = await action.execute(client, finalInput);
+  await executeAndPrint(flags, () => action.execute(client, finalInput));
+}
 
-  printResponse(response.status, response.data, response.rawBody);
+async function executeAndPrint(flags: Flags, operation: () => Promise<OnePanelResponse<unknown>>) {
+  const fs = await import('node:fs/promises');
+  const outputFile = readOptionalString(flags['output-file']);
+  const file = outputFile ? await fs.open(outputFile, 'wx', 0o600) : undefined;
+  try {
+    const response = await operation();
+    if (file) {
+      await file.writeFile(JSON.stringify(response.data, null, 2) + '\n');
+      await file.sync();
+    }
+    printResponse(response.status, response.data, response.rawBody);
+  } finally {
+    await file?.close();
+  }
 }
 
 function parseArgs(args: string[]): { positionals: string[]; flags: Flags } {
@@ -214,10 +262,6 @@ function createClient(flags: Flags): OnePanelClient {
   });
 }
 
-function computeToken(apiKey: string, timestamp: string): string {
-  return createHash('md5').update(`1panel${apiKey}${timestamp}`).digest('hex');
-}
-
 async function loadInput(flags: Flags): Promise<unknown> {
   const inputFile = readOptionalString(flags['input-file']);
   const inputJson = readOptionalString(flags['input-json']);
@@ -229,11 +273,11 @@ async function loadInput(flags: Flags): Promise<unknown> {
   if (inputFile) {
     const fs = await import('node:fs/promises');
     const content = await fs.readFile(inputFile, 'utf8');
-    return JSON.parse(content);
+    return parseInputJson(content);
   }
 
   if (inputJson) {
-    return JSON.parse(inputJson);
+    return parseInputJson(inputJson);
   }
 
   return {};
@@ -246,10 +290,34 @@ function mergeOperateNode(input: unknown, operateNode?: string): unknown {
   if (!isRecord(input)) {
     return { operateNode };
   }
+  if (
+    isRecord(input.target) &&
+    input.target.operateNode &&
+    input.target.operateNode !== operateNode
+  )
+    throw new PanelError('TARGET_MISMATCH', '--node conflicts with explicit target');
+  if (
+    isRecord(input.plan) &&
+    isRecord(input.plan.target) &&
+    input.plan.target.operateNode !== operateNode
+  )
+    throw new PanelError('TARGET_MISMATCH', '--node conflicts with reviewed plan target');
   return {
     ...input,
     operateNode,
+    ...(isRecord(input.target) ? { target: { ...input.target, operateNode } } : {}),
   };
+}
+
+function parseInputJson(content: string): unknown {
+  try {
+    return JSON.parse(content);
+  } catch {
+    throw new PanelError(
+      'INVALID_INPUT',
+      'Input must be valid JSON; inspect the private input file locally',
+    );
+  }
 }
 
 function parseOptionalJson(value: string | boolean | undefined): unknown {
@@ -257,7 +325,7 @@ function parseOptionalJson(value: string | boolean | undefined): unknown {
   if (!stringValue) {
     return undefined;
   }
-  return JSON.parse(stringValue);
+  return parseInputJson(stringValue);
 }
 
 function readOptionalString(value: string | boolean | undefined): string | undefined {
@@ -279,13 +347,13 @@ function getRequiredModule(moduleId: string) {
 function printResponse(status: number, data: unknown, rawBody: string): void {
   const output = {
     status,
-    ok: status >= 200 && status < 300,
-    data,
+    ok: status >= 200 && status < 300 && !(isRecord(data) && data.status === 'FAIL'),
+    data: redact(data),
   };
 
   console.log(JSON.stringify(output, null, 2));
 
-  if (status >= 400) {
+  if (status >= 400 || (isRecord(data) && data.status === 'FAIL')) {
     if (!data && rawBody) {
       console.error(rawBody);
     }
@@ -298,7 +366,9 @@ main().catch((error) => {
     JSON.stringify(
       {
         ok: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : 'Unexpected failure',
+        code: error instanceof PanelError ? error.code : 'INVALID_INPUT',
+        details: error instanceof PanelError ? redact(error.details) : undefined,
       },
       null,
       2,

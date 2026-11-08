@@ -1,3 +1,4 @@
+import { websiteSecurityActions } from './website-security.js';
 async function searchWebsites(client, input = {}) {
     return client.request({
         method: 'POST',
@@ -28,7 +29,8 @@ async function getWebsite(client, input) {
 async function getWebsiteConfig(client, input) {
     return client.request({
         method: 'GET',
-        path: `/api/v2/websites/${input.id}/config/${input.type}`,
+        path: `/api/v2/websites/${input.id}/config/${input.type ?? 'openresty'}`,
+        operateNode: input.operateNode,
     });
 }
 async function listDomains(client, input) {
@@ -90,6 +92,7 @@ export const websitesModule = {
     title: 'Websites',
     description: 'Website list/detail reads, HTTPS and certificate reads, and website log reads.',
     actions: {
+        ...websiteSecurityActions,
         searchWebsites: {
             id: 'searchWebsites',
             summary: 'Read paginated website rows and status fields.',

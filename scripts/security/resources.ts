@@ -1,0 +1,183 @@
+import path from 'node:path';
+import type { OnePanelClientLike } from '../types.js';
+import { sha256 } from './change-plan.js';
+import { parseNginx, flatten, assertLuaUnchanged } from './nginx-config.js';
+import type { Resource } from './change-plan.js';
+import { checkContent, discoverSite, type Target, unwrap } from './discovery.js';
+import { controlledPath, remoteStat } from './path-policy.js';
+import { requireInput, PanelError } from './errors.js';
+
+export async function siteResource(client: OnePanelClientLike, target: Target): Promise<Resource> {
+  const discovered = await discoverSite(client, target);
+  return {
+    id: 'websites.raw',
+    target,
+    validate(value) {
+      checkContent(value);
+      requireInput(
+        parseNginx(value).some((node) => node.name === 'server' && node.children),
+        'Full site config with a server block required',
+      );
+      assertLuaUnchanged(discovered.content, value);
+    },
+    async read() {
+      await discoverSite(client, target);
+      const info = await remoteStat(client, discovered.configPath, target.operateNode);
+      requireInput(info && !info.isDir, 'Site config must exist');
+      return unwrap(
+        await client.request({
+          method: 'GET',
+          path: `/api/v2/websites/${target.websiteId}/config/openresty`,
+          operateNode: target.operateNode,
+        }),
+      ).content;
+    },
+    async write(content) {
+      checkContent(content);
+      await client.request({
+        method: 'POST',
+        path: '/api/v2/websites/nginx/update',
+        operateNode: target.operateNode,
+        body: { id: target.websiteId, content },
+      });
+    },
+  };
+}
+export async function fileResource(
+  client: OnePanelClientLike,
+  target: Target,
+  candidate: string,
+  mode: 'save' | 'create' | 'upload' = 'save',
+): Promise<Resource> {
+  const site = await discoverSite(client, target);
+  const filePath = controlledPath(site.policyRoot, candidate);
+  let createdEmpty = false;
+  return {
+    id: `files.${mode}:${filePath}`,
+    target,
+    ownsIntermediate(value) {
+      return createdEmpty && value === '';
+    },
+    validate(content) {
+      if (content !== null) {
+        checkContent(content, path.posix.extname(filePath) === '.lua' ? 64 * 1024 : 1024 * 1024);
+        if (filePath.endsWith('.json')) {
+          try {
+            JSON.parse(content);
+          } catch {
+            throw new PanelError('INVALID_INPUT', 'Policy JSON must be valid JSON data');
+          }
+        }
+        if (filePath.endsWith('.conf')) {
+          const prefix = `/www/sites/${target.alias}/mtls/acl-`;
+          const nodes = flatten(parseNginx(content));
+          requireInput(
+            nodes.every(
+              (node) =>
+                !node.name.startsWith('lua_') &&
+                (!/_by_lua(?:_|$)/.test(node.name) ||
+                  (node.name === 'access_by_lua_file' &&
+                    node.args.length === 1 &&
+                    node.args[0].startsWith(prefix) &&
+                    /^[a-f0-9]{64}\.lua$/.test(node.args[0].slice(prefix.length)))),
+            ),
+            'Policy config may reference only its site’s versioned reviewed Lua template',
+          );
+        }
+        const versioned = /^(?:ca|acl|policy)-([a-f0-9]{64})\.(pem|lua|conf)$/.exec(
+          path.posix.basename(filePath),
+        );
+        if (versioned)
+          requireInput(
+            sha256(content) === versioned[1],
+            'Versioned artifact filename must match its content digest',
+          );
+      }
+    },
+    async read() {
+      const info = await remoteStat(client, filePath, target.operateNode);
+      if (!info) return null;
+      requireInput(
+        info.isDir === false && info.size <= 1024 * 1024,
+        'Expected bounded regular file',
+      );
+      const data = unwrap(
+        await client.request({
+          method: 'POST',
+          path: '/api/v2/files/content',
+          operateNode: target.operateNode,
+          readOnly: true,
+          body: { path: filePath, isDetail: false },
+        }),
+      );
+      requireInput(
+        data.path === filePath &&
+          !data.isSymlink &&
+          typeof data.content === 'string' &&
+          Buffer.byteLength(data.content) === data.size,
+        'Full unmodified UTF-8 file content required',
+      );
+      return data.content as string;
+    },
+    async write(content) {
+      const info = await remoteStat(client, filePath, target.operateNode);
+      if (content === null) {
+        if (info)
+          await client.request({
+            method: 'POST',
+            path: '/api/v2/files/del',
+            operateNode: target.operateNode,
+            body: { path: filePath, isDir: false, forceDelete: true },
+          });
+        return;
+      }
+      const parent = await remoteStat(client, site.policyRoot, target.operateNode);
+      requireInput(parent?.isDir === true, 'Create the policy directory before writing files');
+      if (mode === 'upload') {
+        await client.request({
+          method: 'POST',
+          path: '/api/v2/files/upload',
+          operateNode: target.operateNode,
+          multipart: {
+            fields: { path: site.policyRoot, overwrite: 'true' },
+            file: {
+              name: path.posix.basename(filePath),
+              content: Buffer.from(content),
+              contentType: 'application/x-pem-file',
+            },
+          },
+        });
+      } else if (info) {
+        await client.request({
+          method: 'POST',
+          path: '/api/v2/files/save',
+          operateNode: target.operateNode,
+          body: { path: filePath, content },
+        });
+      } else {
+        await client.request({
+          method: 'POST',
+          path: '/api/v2/files',
+          operateNode: target.operateNode,
+          body: {
+            path: filePath,
+            content: '',
+            isDir: false,
+            mode: 420,
+            isLink: false,
+            isSymlink: false,
+            sub: false,
+          },
+        });
+        createdEmpty = true;
+        // FileCreate.Content is present in the DTO but ignored by the server implementation.
+        await client.request({
+          method: 'POST',
+          path: '/api/v2/files/save',
+          operateNode: target.operateNode,
+          body: { path: filePath, content },
+        });
+      }
+    },
+  };
+}

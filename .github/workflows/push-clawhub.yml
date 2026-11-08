@@ -34,7 +34,10 @@ on:
       clawscan_note:
         description: "Optional ClawScan note"
         required: false
-        default: "Uses network access only to call the user-configured 1Panel API."
+        default: "Calls the configured 1Panel API and validates local OpenResty via Docker; managed writes default to dry-run."
+
+permissions:
+  contents: read
 
 jobs:
   publish:
@@ -43,10 +46,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: "npm"
@@ -71,6 +74,9 @@ jobs:
             --include='README.md' \
             --include='README.zh-CN.md' \
             --include='LICENSE' \
+            --include='TEST_REPORT.md' \
+            --include='assets/' \
+            --include='assets/fingerprint-vector.pem' \
             --include='agents/***' \
             --include='references/***' \
             --include='scripts/***' \

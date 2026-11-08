@@ -8,6 +8,11 @@ export interface RequestOptions {
   body?: unknown;
   query?: Record<string, QueryValue>;
   operateNode?: string;
+  readOnly?: boolean;
+  multipart?: {
+    fields: Record<string, string>;
+    file: { name: string; content: Buffer; contentType?: string };
+  };
 }
 
 export interface OnePanelResponse<T> {
@@ -18,6 +23,7 @@ export interface OnePanelResponse<T> {
 }
 
 export interface OnePanelClientLike {
+  readonly targetOrigin?: string;
   request<T = unknown>(options: RequestOptions): Promise<OnePanelResponse<T>>;
 }
 
@@ -39,6 +45,8 @@ export interface ModuleAction<Input = void, Output = unknown> {
   method: HttpMethod;
   path: string;
   nodeAware?: boolean;
+  mutation?: boolean;
+  scope?: string;
   execute(client: OnePanelClientLike, input: Input): Promise<OnePanelResponse<Output>>;
 }
 

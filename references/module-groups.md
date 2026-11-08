@@ -7,12 +7,14 @@ This skill is organized as a general 1Panel operation skill.
 The TypeScript client signs every request with:
 
 - `1Panel-Timestamp`
-- `1Panel-Token = md5("1panel" + API_KEY + TIMESTAMP)`
+- `1Panel-Token`: MD5 compatibility or configurable HMAC-SHA256 of `1panel:<timestamp>`
+- explicit `1Panel-Signature-Version`; optional `1Panel-Key-ID`
 
 Environment variables:
 
 - `ONEPANEL_BASE_URL`
 - `ONEPANEL_API_KEY`
+- optional: `ONEPANEL_SIGNATURE_VERSION=hmac-sha256`, `ONEPANEL_KEY_ID`, `ONEPANEL_STATE_DIR`
 - optional: `ONEPANEL_TIMEOUT_MS`
 - optional: `ONEPANEL_SKIP_TLS_VERIFY=true`
 
@@ -60,7 +62,7 @@ Primary endpoints:
 - `GET /api/v2/websites/ssl/:id`
 - `POST /api/v2/files/read`
 
-Reserved mutations are kept for create/update/delete/operate, SSL changes, and domain changes.
+Implemented managed writes: `updateWebsiteRawConfig`, `updateSiteNginxSettings`, `updateProxyRawConfig`. Reads: `getSiteNginxSettings`, `getProxyConfig`. These use the guarded workflow in [openresty-mtls.md](openresty-mtls.md). Other create/update/delete/operate and SSL mutations remain reserved.
 
 ### apps
 
@@ -166,3 +168,15 @@ Primary endpoints:
 - `GET /api/v2/dashboard/current/node`
 
 `core/nodes/*` and `core/xpack/*` may not exist on OSS-only deployments. Treat `404` or `403` as a capability boundary, not as a malformed request.
+
+### openresty
+
+`getGlobalConfig`, `getStatus`, `discoverCapabilities`, `updateGlobalConfig`. Full global file changes require a baseline, explicit target, `backup:true` and `confirmGlobal:true`. No standalone test/reload routes are assumed.
+
+### files
+
+`readFile`, `writeFile`, `createFile`, `uploadFile`. Flat policy files below the selected site’s API-discovered `mtls` directory; ancestor metadata checks, size/type restrictions and no private keys. File saves alone do not imply reload.
+
+### mtls
+
+`inspectSiteMtls`, `planMtlsPolicy`, `applyMtlsPolicy`, `disableMtlsPolicy`, `updateTrustedCAs`, `updateCertificateFingerprintAllowlist`, `updateLuaPolicy`, `testMtlsPolicy`. These compose existing APIs, not native mTLS endpoints. Use [openresty-mtls.md](openresty-mtls.md) for all inputs and [SECURITY.md](SECURITY.md) for local-runtime/WAF/QUIC/recovery boundaries.
