@@ -10,7 +10,9 @@
     "build": "tsc -p tsconfig.build.json",
     "test": "npm run build && node --test tests/*.test.mjs tests/integration/*.test.mjs",
     "test:e2e": "npm run build && node tests/e2e/run.mjs",
-    "test:e2e:local": "npm run build && node tests/e2e/local.mjs"
+    "test:e2e:local": "npm run build && node tests/e2e/local.mjs",
+    "test:package": "python3 -m unittest discover -s tests/packaging -v",
+    "package:skill": "python3 tools/skill_zip.py build"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

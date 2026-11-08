@@ -10,6 +10,10 @@
 - 所有新增写入默认 dry-run；明确目标、确认、并发摘要后 apply；写前备份、写后回读、补偿恢复、脱敏审计。
 - 保留 MD5，支持可配置 HMAC-SHA256 与独立 Key-ID，不自动降级。
 
+## 从 Release ZIP 安装
+
+在 [GitHub Releases](https://github.com/phil616/1Panel-skills/releases) 下载版本化 SKILL ZIP 与 SHA256SUMS。校验后解压，将 `1panel-skills` 目录放入 Agent 的技能目录。Node 18+ 可直接执行 `node dist/scripts/cli.js modules`，无需 npm install。ZIP 保留最小 ESM 运行声明，不含开发依赖和测试凭证；详见 [ZIP 安装与发布流程](references/releasing.md)。开发和测试仍使用完整源码 checkout。
+
 ## 使用
 
 通过私密环境变量配置 `ONEPANEL_BASE_URL`、`ONEPANEL_API_KEY`。可选 `ONEPANEL_SIGNATURE_VERSION=hmac-sha256`、`ONEPANEL_KEY_ID`、`ONEPANEL_TIMEOUT_MS`、`ONEPANEL_STATE_DIR`。默认校验 TLS；按面板版本在设置或用户信息抽屉中管理 API Key、授权范围和 IP 限制。

@@ -10,6 +10,10 @@ A TypeScript/Node.js 18+ 1Panel operations skill, forked from [1Panel-dev/1Panel
 - Default dry-run, explicit target/confirmation/baseline gates, private backups, read-back, compensating rollback and redacted audit.
 - MD5 compatibility and configurable HMAC-SHA256/independent Key-ID; no automatic downgrade.
 
+## Install from a release ZIP
+
+Download the versioned skill ZIP and SHA256SUMS from [GitHub Releases](https://github.com/phil616/1Panel-skills/releases). Verify, unzip, and place the `1panel-skills` directory in your Agent's skills directory. Node 18+ can run `node dist/scripts/cli.js modules` immediately; no npm install is needed. The ZIP includes minimal ESM runtime metadata and excludes development dependencies and test credentials. See [ZIP installation and release workflow](references/releasing.md); use a full source checkout for development/testing.
+
 ## Start
 
 Configure `ONEPANEL_BASE_URL` and `ONEPANEL_API_KEY` privately. Optional: `ONEPANEL_SIGNATURE_VERSION=hmac-sha256`, `ONEPANEL_KEY_ID`, `ONEPANEL_TIMEOUT_MS`, `ONEPANEL_STATE_DIR`. TLS verification is enabled by default. API setup is under panel settings on older versions and the user-information drawer on newer versions; use your panel's documented API-key controls and scope/IP restrictions.
