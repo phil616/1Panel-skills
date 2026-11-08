@@ -1,188 +1,66 @@
-# 1Panel Skills
+# 1Panel Skills — 个人维护版
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-面向 Hermes、OpenClaw 等 Agent 运行时的 1Panel 运维技能包，基于 TypeScript 实现。
+基于 [1Panel-dev/1Panel-skills](https://github.com/1Panel-dev/1Panel-skills) 官方上游维护的 TypeScript / Node.js 18+ 技能。保留监控、网站、应用、容器、日志、定时任务、任务中心和节点的既有查询，新增 OpenResty 与 mTLS 受控管理，不修改 1Panel 主项目。
 
-## 功能特性
+- 完整站点配置、已有反代文件、全局配置和服务端支持的结构化参数管理。
+- 限定站点策略目录，创建目录/文本文件、multipart 上传公开 CA PEM，禁止私钥。
+- 版本化多 CA mTLS、客户端叶证书 **DER SHA-256** 白名单、默认拒绝的受审 Lua 模板，主动检测 WAF/Lua 冲突。
+- 所有新增写入默认 dry-run；明确目标、确认、并发摘要后 apply；写前备份、写后回读、补偿恢复、脱敏审计。
+- 保留 MD5，支持可配置 HMAC-SHA256 与独立 Key-ID，不自动降级。
 
-- **资源监控**：当前节点状态、仪表盘指标、CPU/内存 Top 进程、监控历史、GPU 历史
-- **网站检查**：网站列表与详情、Nginx 配置读取、域名读取、HTTPS 配置读取、SSL 证书读取、网站日志读取
-- **应用检查**：应用市场读取、已安装应用状态检查、服务信息读取、端口与连接信息读取
-- **容器检查**：容器列表、状态、Inspect、资源统计、日志读取
-- **日志检查**：操作日志、登录日志、系统日志文件列表、通用日志文件读取
-- **定时任务检查**：定时任务列表与详情、下次执行预览、执行记录、记录日志读取
-- **任务中心检查**：任务中心记录与执行中数量
-- **节点检查**：节点列表、简化节点列表、节点选项、节点状态读取
-- **预留写操作**：已经按模块预留创建、更新、删除、重启等变更接口定义，后续可继续扩展
+## 使用
 
-## 目录结构
-
-```text
-1Panel-skills/
-├── SKILL.md                  # 技能说明
-├── README.md                 # 英文 README
-├── README.zh-CN.md           # 中文 README
-├── package.json              # Node 包元数据
-├── tsconfig.json             # TypeScript 类型检查配置
-├── tsconfig.build.json       # TypeScript 构建配置
-├── agents/
-│   └── openai.yaml           # UI 元数据
-├── dist/                     # 运行时与 CLI 使用的预编译产物
-│   ├── plugin.js
-│   └── scripts/
-│       ├── cli.js
-│       ├── client.js
-│       ├── index.js
-│       └── modules/
-├── references/
-│   └── module-groups.md      # 模块说明与 API 备注
-└── scripts/
-    ├── cli.ts                # 本地 CLI 入口
-    ├── client.ts             # 1Panel 签名客户端
-    ├── index.ts              # 模块注册表
-    ├── types.ts              # 公共类型
-    └── modules/
-        ├── monitoring.ts
-        ├── websites.ts
-        ├── apps.ts
-        ├── containers.ts
-        ├── logs.ts
-        ├── cronjobs.ts
-        ├── task-center.ts
-        └── nodes.ts
-```
-
-## 技能说明
-
-### 1panel-skills
-
-这是一个通用的 1Panel 操作技能，可供 OpenClaw、Hermes 等 Agent 运行时调用。当前实现以查询、读取、状态校验为主，同时保留了按模块分组的写操作预留定义，后续可以继续扩展。
-
-#### 模块列表
-
-| 模块 | 说明 |
-|------|------|
-| `monitoring` | 仪表盘指标、当前节点状态、Top 进程、监控历史、GPU 历史 |
-| `websites` | 网站列表/详情、配置读取、HTTPS 读取、证书读取、网站日志读取 |
-| `apps` | 应用市场读取、已安装应用状态检查、服务读取、端口与连接信息 |
-| `containers` | 容器列表、状态、Inspect、资源统计、日志读取 |
-| `logs` | 操作日志、登录日志、系统日志文件、通用日志读取 |
-| `cronjobs` | 定时任务列表/详情、下次执行预览、记录、记录日志、脚本选项 |
-| `task-center` | 任务中心记录与执行中数量 |
-| `nodes` | 节点列表、节点选项、简化节点列表、节点状态 |
-
-## 快速开始
-
-### 1. 环境要求
-
-- 建议使用 Node.js 18 或更高版本
-- 可访问的 1Panel 实例
-- 可用的 1Panel API Key
-
-### 2. 配置 1Panel API
-
-1. 登录 1Panel。
-2. 进入 **设置** -> **API 接口**。
-3. 开启 API 接口。
-4. 复制 API Key。
-5. 测试时建议放通客户端 IP：
-   - IPv4: `0.0.0.0/0`
-   - IPv6: `::/0`
-
-1Panel API 鉴权需要这两个 Header：
-
-- `1Panel-Timestamp`
-- `1Panel-Token = md5("1panel" + API_KEY + TIMESTAMP)`
-
-### 3. 安装到运行时
-
-推荐本地安装方式：
-
-```bash
-mkdir -p ~/.openclaw/skills
-ln -s /path/to/1Panel-skills ~/.openclaw/skills/1panel-skills
-```
-
-仓库已经包含 `dist/` 下的预编译运行产物，正常使用时不需要先手动重新构建。
-
-### 4. 配置运行环境变量
-
-```bash
-export ONEPANEL_BASE_URL="http://192.168.1.2:9999"
-export ONEPANEL_API_KEY="你的 1Panel API Key"
-export ONEPANEL_TIMEOUT_MS="30000"
-export ONEPANEL_SKIP_TLS_VERIFY="false"
-```
-
-## CLI 用法
-
-查看支持的模块：
+通过私密环境变量配置 `ONEPANEL_BASE_URL`、`ONEPANEL_API_KEY`。可选 `ONEPANEL_SIGNATURE_VERSION=hmac-sha256`、`ONEPANEL_KEY_ID`、`ONEPANEL_TIMEOUT_MS`、`ONEPANEL_STATE_DIR`。默认校验 TLS；按面板版本在设置或用户信息抽屉中管理 API Key、授权范围和 IP 限制。
 
 ```bash
 node dist/scripts/cli.js modules
-```
-
-查看某个模块的动作：
-
-```bash
-node dist/scripts/cli.js actions monitoring
-```
-
-发一个原始签名请求：
-
-```bash
+node dist/scripts/cli.js actions websites
+node dist/scripts/cli.js run monitoring getCurrentNode
+node dist/scripts/cli.js run websites searchWebsites --input-json '{"page":1,"pageSize":20}'
 node dist/scripts/cli.js request GET /api/v2/dashboard/base/os
 ```
 
-执行模块化动作：
+仓库跟踪的 `dist/` 可直接运行。需要本地发现时，将本仓库链接到运行时技能目录，例如 Codex 的 `~/.codex/skills/1panel-skills` 或 OpenClaw 的 `~/.openclaw/skills/1panel-skills`；先检查已有同名技能。
+
+## 写入与 mTLS
+
+先调用受控动作生成预览，审阅目标、摘要及 diff。复杂输入用 `--input-file`，完整结果用 `--output-file` 保存到不存在的私密文件，stdout 默认脱敏。Apply 需要 `apply:true,confirm:true,expectedSha256`；全局修改额外要求 `backup:true,confirmGlobal:true`，Lua 和多文件 mTLS 另有明确确认字段。
+
+完整的 [读取 → 规划 → 审阅 → apply → TLS 测试 → disable 示例](references/openresty-mtls.md) 包含全部动作和恢复说明。通用 `request` 保留 GET/已知 POST 查询，拒绝绕过保护直接写入。`sign` 保留原行为，会主动输出短时签名 Header，应私密使用。
+
+P0 API 支持显式节点；高级 mTLS 发布目前仅支持**本机 Docker、回环面板地址**及已证实的 `/www` 映射。要求单个 HTTPS server、可靠 Lua 加密组件；拒绝 QUIC/HTTP3、现有 WAF/access handler、提前 return/rewrite 等绕过路径和不支持的站点布局。仅实现 enforce 模式及 `sha256-acl-v1` 模板，不接受任意 Lua。测试的默认 OpenResty 镜像缺少 `lua-resty-openssl`，必须准备可持久维护的依赖，技能不会静默安装或覆盖 WAF。
+
+服务端没有原子 CAS 或多文件事务；摘要复查不能彻底消除竞争，需要协调其他编辑器。保存文件不等于 reload，reload 不等于认证策略生效；平滑 reload 也不保证立即撤销已有连接。详见 [安全边界与恢复](references/SECURITY.md)。
+
+## 模块与维护
+
+| 模块 | 能力 |
+| --- | --- |
+| `monitoring` | 指标、实时/Top 进程、历史/GPU |
+| `websites` | 既有读取，新增完整站点/反代及限定结构化写入 |
+| `apps`、`containers` | 原应用与容器检查、服务、状态、统计/日志 |
+| `logs`、`cronjobs`、`task-center`、`nodes` | 原检查动作；部分节点功能取决于版本/授权 |
+| `openresty` | 全局配置、状态、能力探测与受控修改 |
+| `files` | 选定站点的 mtls 策略目录与公开 CA 上传 |
+| `mtls` | 检查、计划、应用、关闭、CA/指纹/Lua 更新、授权测试 |
+
+源代码位于 `scripts/`，共享保护位于 `scripts/security/`，测试位于 `tests/`；`assets/fingerprint-vector.pem` 为公开测试向量。[SKILL.md](SKILL.md) 为 Agent 入口；另见 [模块说明](references/module-groups.md)、[上游 API 与升级依据](references/upstream-api.md)、[验收报告](TEST_REPORT.md)。
 
 ```bash
-node dist/scripts/cli.js run monitoring getCurrentNode
-node dist/scripts/cli.js run websites searchWebsites --input-json '{"page":1,"pageSize":20}'
-```
-
-打印当前签名 Header：
-
-```bash
-node dist/scripts/cli.js sign
-```
-
-## 运行时集成
-
-这个仓库提供一个运行时入口：
-
-- `dist/scripts/cli.js`：可直接执行的本地签名 CLI
-
-Agent 运行时可以调用 CLI，或者直接把 `scripts/` 下的 TypeScript 资源作为接口定义来源。
-
-## 开发
-
-安装依赖：
-
-```bash
-npm install
-```
-
-类型检查：
-
-```bash
+npm ci
 npm run typecheck
-```
-
-只有修改了 TypeScript 源码后才需要重新构建：
-
-```bash
 npm run build
+npm test
+npm run test:e2e           # 无明确授权的隔离配置时报告 NOT RUN
+npm run test:e2e:local     # 新建并清理独立 1Panel/OpenResty，前提见操作指南
 ```
 
-## 注意事项
+PR CI 使用只读权限运行 Node 18/24 类型检查与单元/Mock 测试。手动 ClawHub 打包已包含公开运行时测试向量；使用前应指定自己的发布命名空间，本次未发布。
 
-1. 不要把真实 API Key 提交到版本控制。
-2. 如果返回 `{"code":401,"message":"API 接口密钥错误"}`，优先检查复制的 Key 是否正确，以及 1Panel API 设置是否已经点击“确认”保存。
-3. 如果返回 IP 相关鉴权错误，检查白名单配置和运行环境的真实出口 IP。
-4. 某些节点相关接口可能要求 1Panel Pro 或 XPack。
+源码变更应同步提交 `dist/`。不得提交真实 Key、私钥、本地计划或用户配置。其余上游预留写操作继续保留，不宣称已实现。
 
 ## 许可证
 
-MIT
+沿用上游 [LICENSE](LICENSE) 的 GPL-3.0；修正上游 README 原 MIT 标注与许可证文件不一致的问题。

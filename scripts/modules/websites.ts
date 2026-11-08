@@ -1,3 +1,4 @@
+import { websiteSecurityActions } from './website-security.js';
 import type { ModuleDefinition, OnePanelClientLike, PageInput } from '../types.js';
 
 export interface WebsiteSearchInput extends PageInput {
@@ -51,11 +52,12 @@ async function getWebsite(client: OnePanelClientLike, input: { id: number }) {
 
 async function getWebsiteConfig(
   client: OnePanelClientLike,
-  input: { id: number; type: string },
+  input: { id: number; type?: string; operateNode?: string },
 ) {
   return client.request({
     method: 'GET',
-    path: `/api/v2/websites/${input.id}/config/${input.type}`,
+    path: `/api/v2/websites/${input.id}/config/${input.type ?? 'openresty'}`,
+    operateNode: input.operateNode,
   });
 }
 
@@ -73,10 +75,7 @@ async function getHttpsConfig(client: OnePanelClientLike, input: { id: number })
   });
 }
 
-async function searchCertificates(
-  client: OnePanelClientLike,
-  input: CertificateSearchInput = {},
-) {
+async function searchCertificates(client: OnePanelClientLike, input: CertificateSearchInput = {}) {
   return client.request({
     method: 'POST',
     path: '/api/v2/websites/ssl/search',
@@ -110,10 +109,7 @@ async function getCertificate(client: OnePanelClientLike, input: { id: number })
   });
 }
 
-async function readWebsiteLogLines(
-  client: OnePanelClientLike,
-  input: WebsiteLogReadInput,
-) {
+async function readWebsiteLogLines(client: OnePanelClientLike, input: WebsiteLogReadInput) {
   return client.request({
     method: 'POST',
     path: '/api/v2/files/read',
@@ -133,6 +129,7 @@ export const websitesModule: ModuleDefinition = {
   title: 'Websites',
   description: 'Website list/detail reads, HTTPS and certificate reads, and website log reads.',
   actions: {
+    ...websiteSecurityActions,
     searchWebsites: {
       id: 'searchWebsites',
       summary: 'Read paginated website rows and status fields.',
@@ -199,7 +196,8 @@ export const websitesModule: ModuleDefinition = {
     },
     readWebsiteLogLines: {
       id: 'readWebsiteLogLines',
-      summary: 'Read website log lines through the generic file-log endpoint. Common names are access.log and error.log.',
+      summary:
+        'Read website log lines through the generic file-log endpoint. Common names are access.log and error.log.',
       method: 'POST',
       path: '/api/v2/files/read',
       nodeAware: true,

@@ -7,7 +7,10 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc -p tsconfig.build.json"
+    "build": "tsc -p tsconfig.build.json",
+    "test": "npm run build && node --test tests/*.test.mjs tests/integration/*.test.mjs",
+    "test:e2e": "npm run build && node tests/e2e/run.mjs",
+    "test:e2e:local": "npm run build && node tests/e2e/local.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
