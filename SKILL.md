@@ -56,4 +56,6 @@ For mutations, environment setup, complete CLI examples and recovery, read [refe
 
 ## Maintenance
 
+The release ZIP is ready to run on Node 18+ without npm install. See [references/releasing.md](references/releasing.md) for installation, version checks and release recovery. Development commands below apply to a full repository checkout; the standalone ZIP omits development dependencies and tests.
+
 Keep GPL-3.0 and upstream functionality. After source edits run `npm ci`, `npm run typecheck`, `npm run build`, `npm test`; commit the regenerated tracked `dist/`. For the disposable real integration suite run `npm run test:e2e:local` (Docker, installed 1Panel binaries, Python, OpenSSL and Git required). It creates a fresh panel database and removes its containers, network and test certificates afterward. Read [TEST_REPORT.md](TEST_REPORT.md) for the measured acceptance results.

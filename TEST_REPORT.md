@@ -4,6 +4,8 @@
 
 基础实现提交：[e1f70fde107d11fb33c02dafcd7e563b30fcff09](https://github.com/phil616/1Panel-skills/commit/e1f70fde107d11fb33c02dafcd7e563b30fcff09)。个人 Fork PR：[#1](https://github.com/phil616/1Panel-skills/pull/1)。该基础提交的 [GitHub CI](https://github.com/phil616/1Panel-skills/actions/runs/42495949694) 已实际完成，Node 18 和 Node 24 两个 job 均 SUCCESS；追加的 Lua 旁路限制与最终提交见同一 PR 历史；未自动合并。
 
+> 2026-11-09 更新：PR #1 已按用户要求合并；后续新增独立 ZIP 打包与 Release CI/CD，安装与发布说明见 [references/releasing.md](references/releasing.md)。下文保留 2026-11-08 开发验收记录。
+
 ## 来源与基线
 
 - 官方 Skill `main`：`33d74c9502e7ae509d8c1d7f3f1c78fd13ac23c6`。
